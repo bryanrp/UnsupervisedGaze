@@ -41,8 +41,25 @@ class PreprocessedDataset(PatchDataset):
             unique_participants = set(unique_participants[nTrain:])
         self.sample_key_list = [x for x in self.sample_key_list if x['sub']['participant'] in unique_participants]
 
+    # def load_patch(self, access_info, sample_tags):
+    #     entry = bz2.BZ2File(os.path.join(self.dataset_path, access_info), 'rb')
+    #     entry = cPickle.load(entry)
+    #     entry['frame'] = np.transpose(entry['frame'], [1, 2, 0]) 
+    #     return entry, os.path.join(self.dataset_path, access_info)
+
     def load_patch(self, access_info, sample_tags):
-        entry = bz2.BZ2File(os.path.join(self.dataset_path, access_info), 'rb')
-        entry = cPickle.load(entry)
-        entry['frame'] = np.transpose(entry['frame'], [1, 2, 0]) 
-        return entry, os.path.join(self.dataset_path, access_info)
+        entry_path = os.path.join(self.dataset_path, access_info)
+        try:
+            with bz2.BZ2File(entry_path, 'rb') as f:
+                entry = cPickle.load(f)
+            
+            # HARD VALIDATION
+            if entry['frame'].shape != (256, 256, 3):  # Your valid shape
+                raise ValueError(
+                    f"Invalid frame shape {entry['frame'].shape} in {entry_path}"
+                )
+            
+            return entry, entry_path
+        except Exception as e:
+            print(f"CRITICAL ERROR IN {entry_path}: {str(e)}")
+            raise

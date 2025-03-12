@@ -23,8 +23,10 @@ class DefaultConfig(object):
 
     # Dataset used
     dataset_name = 'eve'
-    eve_raw_path = '/home/ubuntu/data/eve_dataset/'
-    eve_preprocessed_path = '/home/ubuntu/data/eve_preprocessed/'
+    # eve_raw_path = '/home/ubuntu/data/eve_dataset/'
+    # eve_preprocessed_path = '/home/ubuntu/data/eve_preprocessed/'
+    eve_raw_path = 'C:/Users/victus/Downloads/eve_dataset/eve_dataset'
+    eve_preprocessed_path = 'C:/Users/victus/Documents/git-project/capstone/UnsupervisedGaze/all-preprocessed/rgb-24'
 
     # Data loading
     @property
@@ -76,7 +78,8 @@ class DefaultConfig(object):
     gradient_clip_amount = 5.0
 
     # WANDB
-    wandb_project_name = 'eyesontheroad'
+    # wandb_project_name = 'eyesontheroad'
+    wandb_project_name = None
     exp_name = 'temp-exp-name'
     group_name = ''
     exp_tags = ['default',]

@@ -130,3 +130,7 @@ dmypy.json
 
 outputs/
 wandb/
+
+# custom
+preprocessed/
+all-preprocessed/

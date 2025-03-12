@@ -1,0 +1,46 @@
+# Tier 1 (Required)
+# These packages are needed for the core training, preprocessing, and feature extraction.
+torch==1.10.2
+torchvision==0.11.3
+# torchaudio==0.7.2
+torchaudio==0.10.2
+numpy==1.21.2
+h5py==3.6.0
+opencv-python==4.5.5.62
+frozendict==2.3.0
+pyyaml==6.0
+tensorboard==2.8.0
+tensorboard-data-server==0.6.1
+tensorboard-plugin-wit==1.8.1
+coloredlogs==15.0.1
+wandb==0.12.10
+psutil==5.9.0
+
+# Tier 2 (Recommended)
+# These packages are not strictly required for the experiments but help with logging,
+# configuration, version control, and improved usability.
+absl-py==1.0.0
+gitpython==3.1.26
+shortuuid==1.0.8
+yaspin==2.1.0
+termcolor==1.1.0
+markdown==3.3.6
+future==0.18.2
+
+# Tier 3 (Optional)
+# Install these only if you need extra functionality (e.g. docker integration, advanced error tracking, etc.)
+# docker-pycreds==0.4.0
+# grpcio==1.43.0
+# importlib-metadata==4.10.1
+# pathtools==0.1.2
+# promise==2.3
+# sentry-sdk==1.5.4
+# ffmpeg-python==0.2.0
+# werkzeug==2.0.3
+# zipp==3.7.0
+
+# After errors
+tensorboardX==2.4
+protobuf==3.20.1
+ffmpeg-python==0.2.0
+matplotlib==3.5.1

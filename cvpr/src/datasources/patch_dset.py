@@ -16,9 +16,6 @@ config = DefaultConfig()
 from utils.torch_utils import container_to_tensors
 from utils.data_types import MultiDict
 
-import os
-import bz2
-import _pickle as cPickle
 
 eve_has_glasses = set(['test03', 'test08', 'val04', 'train06', 'train30', 'train39'])
 
@@ -38,7 +35,10 @@ class PatchDataset(Dataset):
         self.patches[tags] = access_info
 
     def finalize_patches(self):
+        # In PreprocessedDataset.finalize_patches:
         self.sample_key_list = list(self.patches.keys(stop_level=self.split_sample_level))
+        if not self.sample_key_list:
+            raise ValueError("No samples found after filtering!")
 
         # Add to sub unique tags
         for sub, sub_dict in self.patches.items():
@@ -85,19 +85,6 @@ class PatchDataset(Dataset):
 
     def __len__(self):
         return len(self.sample_key_list)
-
-    # def load_patch(self, access_info, combo_tags):
-    #     # Example implementation
-    #     frame_path = access_info['frame_path']  # Replace with actual key storing paths
-    #     gaze_dir = access_info['gaze_dir']
-    #     head_dir = access_info['head_dir']
-        
-    #     # Return either a valid path or pre-loaded 3-channel array
-    #     return {
-    #         'frame': frame_path,  # Prefer paths to avoid shape issues
-    #         'gaze_dir': gaze_dir,
-    #         'head_dir': head_dir
-    #     }, frame_path
 
     def load_patch(self, access_info, sample_tags):
         raise NotImplementedError()
@@ -160,63 +147,10 @@ class PatchDataset(Dataset):
         gt = torch.stack(gt, axis=0)
         return gt
 
-    # def preprocess_frame(self, frame):
-    #     # Load frame (handles paths and pre-loaded arrays)
-    #     if isinstance(frame, (np.ndarray, torch.Tensor)):
-    #         img = frame.copy()
-    #     elif isinstance(frame, str):
-    #         img = cv2.imread(frame)
-    #         if img is None:
-    #             print(f"ERROR: Failed to load image at {frame}")
-    #             img = np.zeros((config.raw_input_size, config.raw_input_size, 3), dtype=np.uint8)
-    #     else:
-    #         raise TypeError(f"Unexpected frame type: {type(frame)}")
-
-    #     # Convert grayscale to 3 channels if needed
-    #     if len(img.shape) == 2:  # Grayscale (H, W)
-    #         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    #     elif img.shape[2] == 1:  # Single-channel (H, W, 1)
-    #         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    #     elif img.shape[2] == 4:  # RGBA
-    #         img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-    #     # Resize and validate
-    #     try:
-    #         img = cv2.resize(img, (config.raw_input_size, config.raw_input_size))
-    #     except cv2.error:
-    #         img = np.zeros((config.raw_input_size, config.raw_input_size, 3), dtype=np.uint8)
-
-    #     # Ensure final shape is (3, H, W)
-    #     return np.transpose(img, (2, 0, 1))
-
-    def preprocess_frame(self, frame, entry_path):  # Add entry_path parameter
-        try:
-            # Convert to CHW format
-            if frame.shape[2] == 3:  # HWC format
-                frame = np.transpose(frame, (2, 0, 1))  # To CHW
-                
-            # Validate after transpose
-            if frame.shape[0] != 3:
-                raise ValueError(
-                    f"Invalid CHW shape in {entry_path}: " 
-                    f"{frame.shape}"
-                )
-                
-            # Resize with strict checks
-            resized = cv2.resize(
-                frame.transpose(1, 2, 0),  # CHW->HWC for OpenCV
-                (config.raw_input_size, config.raw_input_size)
-            )
-            
-            return resized.transpose(2, 0, 1)  # HWC->CHW
-            
-        except Exception as e:
-            raise ValueError(f"Preprocess failed {entry_path}: {str(e)}")
-
-    # def preprocess_frame(self, frame):
-    #     frame = cv2.resize(frame, (config.raw_input_size, config.raw_input_size))
-    #     frame = np.transpose(frame, [2, 0, 1])
-    #     return frame
+    def preprocess_frame(self, frame):
+        frame = cv2.resize(frame, (config.raw_input_size, config.raw_input_size))
+        frame = np.transpose(frame, [2, 0, 1])
+        return frame
 
     def __getitem__(self, idx):
         # Get the list of all patches in the sample
@@ -253,31 +187,7 @@ class PatchDataset(Dataset):
                 tag_value = tag_perm_to_value[tag][tag_perm]
                 combo_tags[tag] = tag_value
             if combo_tags in self.patches:
-                try:
-                    # Get the path to the .pbz2 file
-                    access_info = self.patches[combo_tags]
-                    entry_path = os.path.join(self.dataset_path, access_info)  # NEW
-
-                    # Load patch and validate
-                    patch, patch_path = self.load_patch(access_info, combo_tags)  # Assuming load_patch is inherited
-
-                    # Validate frame before processing
-                    if 'frame' not in patch:
-                        raise ValueError(f"'frame' missing in {entry_path}")
-                    frame = patch['frame']
-
-                    # Add explicit check for shape
-                    if frame.shape != (3, 256, 256):  # Match your valid data
-                        raise ValueError(
-                            f"Invalid frame shape {frame.shape} in {entry_path}. "
-                            "Expected (3,256,256)"
-                        )
-
-                    data['frames'][combo_i] = self.preprocess_frame(frame, entry_path)  # Pass path
-
-                except Exception as e:
-                    print(f"BROKEN PATCH: {entry_path}")  # Now shows full path
-                    raise  # Fail hard
+                patch, patch_path = self.load_patch(self.patches[combo_tags], combo_tags)
                 data['paths'].append(patch_path)
                 data['frames'][combo_i] = self.preprocess_frame(patch['frame'])
                 data['valids'][combo_i] = combo_tags['app'] != 'face' or not self.is_eval

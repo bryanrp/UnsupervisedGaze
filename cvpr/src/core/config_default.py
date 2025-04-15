@@ -23,10 +23,12 @@ class DefaultConfig(object):
 
     # Dataset used
     dataset_name = 'eve'
+    # TODO ADJUST THESE LINES
     # eve_raw_path = '/home/ubuntu/data/eve_dataset/'
     # eve_preprocessed_path = '/home/ubuntu/data/eve_preprocessed/'
-    eve_raw_path = 'C:/Users/victus/Downloads/eve_dataset/eve_dataset'
-    eve_preprocessed_path = 'C:/Users/victus/Documents/git-project/capstone/UnsupervisedGaze/all-preprocessed/rgb-24'
+    eve_raw_path = r'C:\Users\victus\Documents\git-project\capstone\dataset-sample\eve-small'
+    # eve_preprocessed_path = 'C:/Users/victus/Documents/git-project/capstone/UnsupervisedGaze/all-preprocessed/default'
+    eve_preprocessed_path = r'C:\Users\victus\Documents\git-project\capstone\UnsupervisedGaze\all-preprocessed\try-13-3'
 
     # Data loading
     @property
@@ -48,7 +50,7 @@ class DefaultConfig(object):
     num_epochs = 10.
     num_epochs_gaze_estimation = 2000
 
-    train_data_workers = 8
+    train_data_workers = 1
 
     log_every_n_steps = 1  # NOTE: Every other interval has to be a multiple of this!!!
     tensorboard_scalars_every_n_steps = 1

@@ -8,18 +8,17 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-
+# TODO ADJUST THESE LINES
 predefined_eve_splits = {
     # 'train': ['train%02d' % i for i in range(1, 40)],
     # 'val': ['val%02d' % i for i in range(1, 6)],
     # 'test': ['test%02d' % i for i in range(1, 11)],
     # 'etc': ['etc%02d' % i for i in range(1, 3)],
-    'train': ['train%02d' % i for i in range(1, 2)],
+    'train': ['train%02d' % i for i in range(1, 3)],
     'val': ['val%02d' % i for i in range(1, 2)],
     'test': ['test%02d' % i for i in range(1, 2)],
     'etc': ['etc%02d' % i for i in range(1, 3)],
 }
-
 
 def stimulus_type_from_folder_name(folder_name):
     parts = folder_name.split('_')
@@ -29,9 +28,8 @@ def stimulus_type_from_folder_name(folder_name):
         return 'points'
     raise ValueError('Given folder name unexpected: %s' % folder_name)
 
-
 class VideoReader(object):
-    def __init__(self, video_path, frame_indices=None, is_async=True, output_size=None, video_decoder_codec='libx264', pix_fmt='rgb24'):
+    def __init__(self, video_path, frame_indices=None, is_async=True, output_size=None, video_decoder_codec='libx264'):
         self.video_decoder_codec = video_decoder_codec
         self.is_async = is_async
         self.video_path = video_path
@@ -45,7 +43,6 @@ class VideoReader(object):
             self.timestamps_path = video_path.replace('.128x72.mp4', '.timestamps.txt')
         else:
             self.timestamps_path = video_path.replace('.mp4', '.timestamps.txt')
-        self.pix_fmt = pix_fmt  # <-- New parameter
         assert(os.path.isfile(self.video_path))
         assert(os.path.isfile(self.timestamps_path))
 
@@ -57,10 +54,10 @@ class VideoReader(object):
         input_params, output_params = self.get_params()
         buffer, _ = (
             ffmpeg.input(self.video_path, **input_params)
-            .output('pipe:', format='rawvideo', pix_fmt=self.pix_fmt,  # <-- Use parameter
-                    loglevel="quiet", **output_params)
-            .run(cmd=r'C:\ffmpeg\bin\ffmpeg.exe', capture_stdout=True, quiet=True)
+            .output('pipe:', format='rawvideo', loglevel="quiet", **output_params)
+            .run(capture_stdout=True, quiet=True)
         )
+
         frames = np.frombuffer(buffer, np.uint8).reshape(-1, self.height, self.width, 3)
 
         # Get timestamps
@@ -119,6 +116,7 @@ class VideoReader(object):
             cmd = 'scale=%d:%d' % (ow, oh)
             output_params['vf'] = (output_params['vf'] + ',' + cmd
                                    if 'vf' in output_params else cmd)
+        output_params['pix_fmt'] = 'rgb24'
 
         return input_params, output_params
 

@@ -31,11 +31,6 @@ logger = logging.getLogger(__name__)
 # Set device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-import stat
-def handle_remove_readonly(func, path, exc_info):
-    # Change the file's mode to writeable and try again.
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
 
 def _convert_cli_arg_type(key, value):
     attr = getattr(config, key)
@@ -131,26 +126,7 @@ def setup_common(model, optimizers):
         if not config.overwrite:
             raise Exception("ERROR: Output directory already exists. Set --overwrite 1 if you want to overwrite the previous results.")
         else:
-            # Modified deletion code with retries and error handling
-            def remove_readonly(func, path, _):
-                """Clear readonly bit and retry removal"""
-                os.chmod(path, stat.S_IWRITE)
-                func(path)
-
-            for attempt in range(5):  # Try 5 times
-                try:
-                    shutil.rmtree(output_dir, onerror=remove_readonly)
-                    break
-                except PermissionError as e:
-                    if attempt < 4:  # Don't sleep on last attempt
-                        time.sleep(2)
-                    else:
-                        logger.warning(f"Could not fully delete {output_dir}: {str(e)}. Proceeding anyway.")
-                        try:  # Try one last time with forced deletion
-                            shutil.rmtree(output_dir, ignore_errors=True)
-                        except:
-                            pass
-
+            shutil.rmtree(output_dir)
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
     tensorboard = Tensorboard(output_dir)
@@ -277,6 +253,7 @@ def test_model_on_all(model, test_data_dicts, current_step, tensorboard=None):
             input_data['tags'] = test_data_dicts['dataset'].original_full_dataset.tags
 
             # Move tensors to GPU
+            print(device)
             input_data = container_send_to_device(input_data, device)
 
             # Get model outputs
@@ -332,6 +309,8 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
     model.train()
     current_step = 0
     best_val = None
+
+    print("Steps", initial_step, num_training_steps)
     for current_step in range(initial_step, num_training_steps):
         current_epoch = (current_step * config.batch_size) / max_dataset_len  # fractional value
         tensorboard.update_current_step(current_step + 1)
@@ -344,6 +323,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
             optimizer.zero_grad()
 
         # Move tensors to GPU
+        print(device)
         input_data = container_send_to_device(input_data, device)
 
         # Get model outputs

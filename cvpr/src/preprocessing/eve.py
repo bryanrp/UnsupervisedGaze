@@ -45,7 +45,7 @@ cache_pkl_path = './src/segmentation_cache/10Hz_seqlen30.pkl'
 class EveConfig():
     video_decoder_codec = 'libx264'  # libx264 | nvdec
     assumed_frame_rate = 10  # We will skip frames from source videos accordingly
-    max_sequence_len = 30  # In frames assuming 10Hz
+    max_sequence_len = 5  # In frames assuming 10Hz
     face_size = [256, 256]  # width, height
     eyes_size = [128, 128]  # width, height
     screen_size = [128, 72]  # width, height
@@ -82,7 +82,7 @@ class EveDataset():
         # Load or calculate sequence segmentations (start/end indices)
         global cache_pkl_path, sequence_segmentations
         cache_pkl_path = (
-            './src/segmentation_cache/%dHz_seqlen%d.pkl' % (
+            './src/segmentation_cache/my-%dHz_seqlen%d.pkl' % (
                 eve_config.assumed_frame_rate, eve_config.max_sequence_len,
             )
         )
@@ -99,17 +99,16 @@ class EveDataset():
 
     def build_segmentation_cache(self):
         """Create support data structure for knowing how to segment (cut up) time sequences."""
-        # all participants
         all_folders = sorted([
             d for d in os.listdir(self.path) if os.path.isdir(self.path + '/' + d)
         ])
+        print(all_folders)
         output_to_cache = {}
-        for folder_name in all_folders: # for each participants
+        for folder_name in all_folders:
             participant_path = '%s/%s' % (self.path, folder_name)
             assert(os.path.isdir(participant_path))
             output_to_cache[folder_name] = {}
 
-            # all steps inside each participant
             subfolders = sorted([
                 p for p in os.listdir(participant_path)
                 if os.path.isdir(os.path.join(participant_path, p))
@@ -126,17 +125,17 @@ class EveDataset():
                     current_outputs = []
                     source_path_pre = '%s/%s' % (subfolder_path, source)
                     available_indices = np.loadtxt('%s.timestamps.txt' % source_path_pre)
-                    num_available_indices = len(available_indices)
+                    num_available_indices = len(available_indices) # 90
 
                     # Determine desired length and skips
-                    fps = source_to_fps[source]
-                    target_len_in_s = eve_config.max_sequence_len / eve_config.assumed_frame_rate
-                    num_original_indices_in_sequence = fps * target_len_in_s
+                    fps = source_to_fps[source] # 30
+                    target_len_in_s = eve_config.max_sequence_len / eve_config.assumed_frame_rate # 3
+                    num_original_indices_in_sequence = fps * target_len_in_s # 90
                     assert(num_original_indices_in_sequence.is_integer())
                     num_original_indices_in_sequence = int(
                         num_original_indices_in_sequence
                     )
-                    index_interval = int(fps / eve_config.assumed_frame_rate)
+                    index_interval = int(fps / eve_config.assumed_frame_rate) # 3
                     start_index = 0
                     while start_index < num_available_indices:
                         end_index = min(
@@ -153,6 +152,7 @@ class EveDataset():
                     if len(current_outputs) > 0:
                         output_to_cache[folder_name][subfolder][source] = current_outputs
                         # print('%s: %d' % (source_path_pre, len(current_outputs)))
+                        # print(f"{source_path_pre}, {current_outputs[0]}")
 
         # Do the caching
         with open(cache_pkl_path, 'wb') as f:
@@ -189,53 +189,38 @@ class EveDataset():
     screen_frames_cache = {}
 
     def load_all_from_source(self, path, source, selected_indices, frame_type='eyes'):
+        import numpy as np
+        import h5py
+        # assert that source is valid
         assert(source in ('basler', 'webcam_l', 'webcam_c', 'webcam_r', 'screen'))
-        
-        logger.info("Loading source '%s' from path: %s", source, path)
-        subentry = {}  # to output
-        if source != 'screen':
-            try:
-                hdf_file = '%s/%s.h5' % (path, source)
-                logger.info("Opening HDF5 file: %s", hdf_file)
-                with h5py.File(hdf_file, 'r') as hdf:
-                    for k1, v1 in hdf.items():
-                        if isinstance(v1, h5py.Group):
-                            logger.debug("Processing HDF5 group: %s", k1)
-                            subentry[k1] = np.copy(v1['data'][selected_indices])
-                            subentry[k1 + '_validity'] = np.copy(v1['validity'][selected_indices])
-                        else:
-                            logger.debug("Processing HDF5 dataset: %s", k1)
-                            shape = v1.shape
-                            subentry[k1] = np.repeat(np.reshape(v1, (1, *shape)),
-                                                    repeats=eve_config.max_sequence_len, axis=0)
-                logger.info("Successfully loaded HDF5 data for source '%s'", source)
-            except Exception as e:
-                logger.error("Error reading HDF5 file for source '%s' at path %s: %s", source, path, e)
-                raise e
 
-            try:
-                logger.info("Computing rotation matrices from head_rvec")
+        subentry = {}  # container for data
+
+        if source != 'screen':
+            with h5py.File('%s/%s.h5' % (path, source), 'r') as hdf:
+                for k1, v1 in hdf.items():
+                    if isinstance(v1, h5py.Group):
+                        subentry[k1] = np.copy(v1['data'][selected_indices])
+                        subentry[k1 + '_validity'] = np.copy(v1['validity'][selected_indices])
+                    else:
+                        shape = v1.shape
+                        subentry[k1] = np.repeat(np.reshape(v1, (1, *shape)),
+                                                repeats=eve_config.max_sequence_len, axis=0)
+            # Compute rotation matrices from rvec values
+            if 'head_rvec' in subentry:
                 subentry['head_R'] = np.stack([cv.Rodrigues(rvec)[0] for rvec in subentry['head_rvec']])
-                logger.debug("Rotation matrices computed successfully")
-            except Exception as e:
-                logger.error("Error computing rotation matrices for source '%s': %s", source, e)
-                raise e
+            else:
+                print("Warning: head_rvec not found in HDF file for source", source)
 
         if eve_config.load_full_frame_for_visualization and source == 'screen':
-            try:
-                vis_video_path = path + '/' + source + '.mp4'
-                logger.info("Loading full frame for visualization from: %s", vis_video_path)
-                _, full_frames = VideoReader(vis_video_path,
-                                            frame_indices=selected_indices,
-                                            is_async=False,
-                                            video_decoder_codec=eve_config.video_decoder_codec).get_frames()
-                subentry['full_frame'] = full_frames
-                logger.debug("Loaded full frame successfully")
-            except Exception as e:
-                logger.error("Error loading full frame for source '%s': %s", source, e)
-                raise e
+            # For visualization, load full frames
+            _, full_frames = VideoReader(path + '/' + source + '.mp4',
+                                        frame_indices=selected_indices,
+                                        is_async=False,
+                                        video_decoder_codec=eve_config.video_decoder_codec).get_frames()
+            subentry['full_frame'] = full_frames
 
-        # Construct video file path and set output size.
+        # Setup video path and output size based on frame type
         video_path = '%s/%s' % (path, source)
         output_size = None
         if source == 'screen':
@@ -249,91 +234,75 @@ class EveDataset():
                 output_size = (eve_config.face_size[0], eve_config.face_size[1])
             elif frame_type == 'eyes':
                 video_path += '_eyes.mp4'
-                output_size = (2*eve_config.eyes_size[0], eve_config.eyes_size[1])
+                output_size = (2 * eve_config.eyes_size[0], eve_config.eyes_size[1])
             else:
-                raise ValueError('Unknown camera frame type: %s' % eve_config.camera_frame_type)
-        
-        logger.info("Constructed video path: %s with output size: %s", video_path, output_size)
-        
-        # Read video frames with explicit RGB format
-        try:
-            timestamps, frames = VideoReader(
-                video_path, 
-                frame_indices=selected_indices,
-                is_async=False, 
-                output_size=output_size,
-                video_decoder_codec=eve_config.video_decoder_codec,
-                pix_fmt='rgb24'  # <-- Add explicit pixel format
-            ).get_frames()
-            logger.info("Successfully read %d frames from video", len(timestamps))
-        except Exception as e:
-            logger.error("Error reading video from %s: %s", video_path, e)
-            raise e
-        
-        # Add channel dimension validation
-        if frames.shape[-1] != 3:  # Should be (N, H, W, 3)
-            raise ValueError(
-                f"Unexpected frame shape {frames.shape} from {video_path}. "
-                "Expected 3 channels (RGB)."
-            )
+                raise ValueError('Unknown camera frame type: %s' % frame_type)
+
+        # Get timestamps and frames from the video
+        timestamps, frames = VideoReader(video_path, frame_indices=selected_indices,
+                                        is_async=False, output_size=output_size, 
+                                        video_decoder_codec=eve_config.video_decoder_codec).get_frames()
 
         subentry['timestamps'] = np.asarray(timestamps, dtype=int)
-        try:
-            if source == 'screen':
-                subentry['frame'] = frames
-            else:
-                if frame_type == 'face':
-                    subentry['face_patch'] = frames
-                else:
-                    ew, eh = eve_config.eyes_size
-                    subentry['right_patch'] = frames[:, :, :, ew:]
-                    subentry['left_patch'] = frames[:, :, :, :ew]
-            logger.info("Processed frames successfully for source '%s'", source)
-        except Exception as e:
-            logger.error("Error processing frames for source '%s': %s", source, e)
-            raise e
+        frames = (self.preprocess_screen_frames(frames)
+                if source == 'screen' else
+                self.preprocess_frames_raw(frames))
 
+        # Save frames with the correct key
+        if source == 'screen':
+            subentry['frame'] = frames
+        else:
+            if frame_type == 'face':
+                subentry['face_patch'] = frames
+            elif frame_type == 'eyes':
+                ew, eh = eve_config.eyes_size
+                subentry['right_patch'] = frames[:, :, :, ew:]
+                subentry['left_patch'] = frames[:, :, :, :ew]
+            else:
+                print("Warning: Unhandled frame type", frame_type)
         return subentry
 
     def process_all_stimuli(self, stimuli_dir, camera, full_path, index_list, stimulus_subindices):
-        logger.info("Starting processing stimuli for full path: %s, camera: %s", full_path, camera)
-        
         all_stimuli = {}
-        try:
-            all_stimuli['eyes'] = self.load_all_from_source(full_path, camera, index_list, 'eyes')
-            logger.debug("Loaded 'eyes' data successfully.")
-        except Exception as e:
-            logger.error("Error loading 'eyes' data from %s: %s", full_path, e)
+        # For eyes, we get left and right patches; for face, we expect a single face_patch.
+        all_stimuli['eyes'] = self.load_all_from_source(full_path, camera, index_list, 'eyes')
+        all_stimuli['face'] = self.load_all_from_source(full_path, camera, index_list, 'face')
         
-        try:
-            all_stimuli['face'] = self.load_all_from_source(full_path, camera, index_list, 'face')
-            logger.debug("Loaded 'face' data successfully.")
-        except Exception as e:
-            logger.error("Error loading 'face' data from %s: %s", full_path, e)
-        
+        files_written = 0
+
+        # Log shapes for debugging
+        # print(full_path)
+        left_shape = all_stimuli['eyes']['left_patch'].shape
+        right_shape = all_stimuli['eyes']['right_patch'].shape
+        face_shape = all_stimuli['face'].get('face_patch', None)
+        # print("Left patch shape:", left_shape)
+        # print("Right patch shape:", right_shape)
+        # print("Face patch shape:", face_shape)
+
         for stimulus_number, stimulus_subindex in stimulus_subindices.items():
-            logger.info("Processing stimulus number: %s", stimulus_number)
             for patch_type in ['left', 'right', 'face']:
-                for time in range(len(stimulus_subindex)):
+                # Determine which source to use based on patch_type
+                src_stimuli = all_stimuli['face'] if patch_type == 'face' else all_stimuli['eyes']
+                key = patch_type + '_patch'
+                if key not in src_stimuli:
+                    print(f"Warning: Expected key '{key}' not found for patch type '{patch_type}'.")
+                    continue
+
+                patch_array = src_stimuli[key]
+                # Loop over all time indices for the current stimulus
+                for time, idx in enumerate(stimulus_subindex):
                     entry_dir = os.path.join(stimuli_dir, camera, str(stimulus_number), patch_type)
+                    os.makedirs(entry_dir, exist_ok=True)
                     entry_path = os.path.join(entry_dir, str(time) + '.pbz2')
-                    
-                    # Ensure the directory exists
-                    if not os.path.isdir(entry_dir):
-                        os.makedirs(entry_dir, exist_ok=True)
-                        logger.debug("Created directory: %s", entry_dir)
-                    
-                    entry = {}
-                    src_stimuli = all_stimuli['face'] if patch_type == 'face' else all_stimuli['eyes']
-                    
-                    try:
-                        entry['frame'] = src_stimuli[patch_type + '_patch'][stimulus_subindex[time]]
-                    except Exception as e:
-                        logger.error("Error fetching frame for patch '%s', stimulus %s, time %s: %s",
-                                    patch_type, stimulus_number, time, e)
+
+                    if idx >= patch_array.shape[0]:
+                        print(f"Warning: Index {idx} is out of range for '{key}' with shape {patch_array.shape} at stimulus {stimulus_number}, patch_type {patch_type}, time {time}.")
                         continue
-                    
-                    # Fetch ground truth values
+
+                    entry = {}
+                    entry['frame'] = patch_array[idx]
+
+                    # Fetch ground truth if available
                     get_values = {
                         'cam_gaze_dir': patch_type + '_g_tobii',
                         'head_dir': 'face_h',
@@ -342,43 +311,37 @@ class EveDataset():
                     }
                     for tar_key, src_key in get_values.items():
                         if src_key in src_stimuli:
-                            try:
-                                entry[tar_key] = src_stimuli[src_key][stimulus_subindex[time]]
-                            except Exception as e:
-                                logger.error("Error fetching %s for patch '%s', stimulus %s, time %s: %s",
-                                            tar_key, patch_type, stimulus_number, time, e)
-                    
-                    # Convert to relative gaze
-                    if 'cam_gaze_dir' in entry:
-                        try:
-                            entry['gaze_dir'] = entry['cam_gaze_dir'] - entry['head_dir']
-                        except Exception as e:
-                            logger.error("Error calculating relative gaze for stimulus %s, time %s: %s",
-                                        stimulus_number, time, e)
-                    
+                            data_array = src_stimuli[src_key]
+                            if idx >= data_array.shape[0]:
+                                print(f"Warning: Index {idx} is out of range for key '{src_key}' with shape {data_array.shape}.")
+                            else:
+                                entry[tar_key] = data_array[idx]
+
+                    # Compute relative gaze if possible
+                    if 'cam_gaze_dir' in entry and 'head_dir' in entry:
+                        entry['gaze_dir'] = entry['cam_gaze_dir'] - entry['head_dir']
+
                     # Convert direction values to vector form
-                    for key in entry.keys():
-                        if '_dir' in key:
-                            try:
-                                entry[key] = pitch_yaw_to_vector(entry[key])
-                            except Exception as e:
-                                logger.error("Error converting direction to vector for key '%s' in stimulus %s, time %s: %s",
-                                            key, stimulus_number, time, e)
-                    
-                    # Write entry to file
-                    try:
+                    for key2 in list(entry.keys()):
+                        if '_dir' in key2:
+                            entry[key2] = pitch_yaw_to_vector(entry[key2])
+
+                    # Write the entry if it is not empty
+                    if entry:
                         with bz2.BZ2File(entry_path, 'w') as f:
                             cPickle.dump(entry, f)
-                        logger.debug("Wrote entry file: %s", entry_path)
-                    except Exception as e:
-                        logger.error("Error writing entry file %s: %s", entry_path, e)
-        
-        logger.info("Completed processing stimuli for full path: %s, camera: %s", full_path, camera)
+                        files_written += 1
+                    else:
+                        print(f"Warning: Empty entry for {entry_path}; file not written.")
+
+        print(f"Total files written: {files_written}")
         return "Processed {:s}, Camera {:s}".format(full_path, camera)
 
     def preprocess(self, output_dir):
         patches = MultiDict(['sub', 'head', 'gaze', 'app'])
+        # Remove multiprocessing by setting num_processes to 0
         num_processes = 32
+
         if num_processes > 0:
             pool = Pool(processes=num_processes)
 
@@ -418,10 +381,14 @@ class EveDataset():
                                 entry_dir_rel = os.path.join(stimuli_dir_rel, camera, str(stimulus_number), patch_type)
                                 entry_path_rel = os.path.join(entry_dir_rel, str(time) + '.pbz2')
 
-                                sub = frozendict({'participant': participant_name, 'stimulus_name': stimulus_name, 'stimulus_number': stimulus_number})
+                                sub = frozendict({
+                                    'participant': participant_name,
+                                    'stimulus_name': stimulus_name,
+                                    'stimulus_number': stimulus_number
+                                })
                                 tags = {'sub': sub, 'head': camera, 'app': patch_type, 'gaze': time}
                                 patches[tags] = entry_path_rel
-                    
+
                     if num_processes == 0:
                         print(self.process_all_stimuli(stimuli_dir, camera, full_path, index_list, stimulus_subindices))
                     else:
@@ -433,18 +400,19 @@ class EveDataset():
             pool.join()
             print("All processes complete")
 
+        # No pool to close or join
         index_path = os.path.join(output_dir, 'index.pbz2')
         with bz2.BZ2File(index_path, 'w') as f:
             cPickle.dump(patches, f)
         print("Finished preprocessing eve")
 
 
-eve_input_path = '/home/ubuntu/data/eve_dataset/'
-eve_output_path = '/home/ubuntu/data/eve_preprocessed/'
-eve_cameras = ['basler', 'webcam_l', 'webcam_c', 'webcam_r']
-eve_stimuli = ['image', 'video', 'wikipedia']
-
 if __name__ == '__main__':
+    eve_input_path = '/home/ubuntu/data/eve_dataset/'
+    eve_output_path = '/home/ubuntu/data/eve_preprocessed/'
+    eve_cameras = ['basler', 'webcam_l', 'webcam_c', 'webcam_r']
+    eve_stimuli = ['image', 'video', 'wikipedia']
+
     for fold_name in ['train', 'val', 'test']:
         dataset = EveDataset(config.eve_raw_path,
                              participants_to_use=predefined_eve_splits[fold_name],

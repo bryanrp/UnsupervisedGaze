@@ -17,6 +17,18 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class CheckpointManager(object):
+    """
+    Saving:
+    - Splits model state into prefix-based files (e.g., encoder.pt, decoder.pt).
+    - Saves optimizer states separately.
+    ```
+    torch.save(sub_state_dict, 'checkpoints/encoder.pt')
+    ```
+    
+    Loading:
+    - Reconstructs full model state from prefix files.
+    - Handles multi-GPU wrappers (nn.DataParallel).
+    """
 
     __model = None
     __optimizers = None

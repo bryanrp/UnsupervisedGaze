@@ -14,6 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 class Tensorboard(object):
+    """
+    Logging:
+    - Scalars: Losses, metrics (add_scalar).
+    - Images: Grids of input/output frames (add_grid).
+    - W&B Integration: Mirrors data to Weights & Biases.
+
+    Example:
+    ```
+    tensorboard.add_scalar('train-loss/total', loss)
+    tensorboard.add_grid('val-frames', frames)
+    ```
+    """
 
     __instance = None
     __writer = None

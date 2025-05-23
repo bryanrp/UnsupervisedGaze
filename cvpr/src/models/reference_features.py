@@ -13,6 +13,12 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class ReferenceFeatureCreator(nn.Module):
+    """
+    Core features:
+    - Aggregates multiple feature vectors (from different views/timestamps) into a single robust "basis feature".
+    - Implements the paper's confidence-weighted feature fusion (Fig 3).
+    - Supports multiple aggregation strategies (mean, max, median, etc.).
+    """
     def __init__(self, num_feature_in):
         super(ReferenceFeatureCreator, self).__init__()
 
@@ -75,14 +81,31 @@ class ReferenceFeatureCreator(nn.Module):
 
 
 def form_features_from_references(reference_features, all_tags, unique_tags):
+    """
+    Combines basis features from different feature types (head/gaze/app/common) into a full feature vector for reconstruction.
+
+    Inputs:
+    ```
+    reference_features = {
+        'head':   {'cam1': (B,1,12), 'cam2': (B,1,12)},  # Basis features per tag
+        'gaze':   {'t1': (B,1,12), 't2': (B,1,12)},
+        ...
+    }
+    all_tags = {'head': [cam1, cam2,...], ...}  # Original view tags
+    ```
+    """
+    print("TEST1", {k: v.shape for (k, v) in reference_features.items()}, all_tags, unique_tags)
+    print("TEST2", reference_features, all_tags, unique_tags)
     batch_size = next(iter(reference_features.values()))[0].shape[0]
     num_views = next(iter(all_tags.values())).shape[0]
     feature_sizes = {k: v[0].shape[-1] for (k, v) in reference_features.items()}
     total_features = np.sum(list(feature_sizes.values()))
 
+    # Initialize output tensor (B, num_views, total_feature_dim)
     # Assemble features
     concat_features = torch.empty((batch_size, num_views, total_features), dtype=torch.float32, device=device)
     feature_offset = 0
+    # Fill slices with corresponding basis features
     for feature_name, feature_size in feature_sizes.items():
         feature_unique_tags = unique_tags[feature_name]
         for tag_i in feature_unique_tags:

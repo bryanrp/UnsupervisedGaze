@@ -92,8 +92,8 @@ class DefaultConfig(object):
     patches_used = ['left', 'right']
     data_views = TypedOrderedDict(str, int)
     data_views['app'] = 2
-    data_views['gaze'] = 2
-    data_views['head'] = 2
+    data_views['gaze'] = 1
+    data_views['head'] = 4
     data_grayscale = True
     train_view_duplicates = TypedOrderedDict(str, int)
     train_view_duplicates['app'] = 1

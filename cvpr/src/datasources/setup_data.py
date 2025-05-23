@@ -33,6 +33,17 @@ def setup_data(mode):
             for gaze in range(config.data_views['gaze']):
                 for app in range(config.data_views['app']):
                     tag_combos.append({'head': head, 'gaze': gaze, 'app': app})
+        """
+        tag_combos = [
+            {'head': 0, 'gaze': 0, 'app': 0},
+            {'head': 0, 'gaze': 0, 'app': 1},
+            {'head': 0, 'gaze': 1, 'app': 0},
+            {'head': 0, 'gaze': 1, 'app': 1},
+            {'head': 1, 'gaze': 0, 'app': 0},
+            {'head': 1, 'gaze': 0, 'app': 1},
+            ...
+        ]
+        """
         
         # Get dataset
         is_eval = (mode == 'extraction') if (fold_name == 'train') else True

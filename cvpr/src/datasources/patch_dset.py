@@ -20,10 +20,15 @@ from utils.data_types import MultiDict
 eve_has_glasses = set(['test03', 'test08', 'val04', 'train06', 'train30', 'train39'])
 
 class PatchDataset(Dataset):
+    """The steps are:
+    1. Set the tag combos, including tags tensor and unique_tags_perm
+    2. Finalize the patches, which builds self.sub_unique_tags. This is called by PreprocessedDataset.__init__
+    3. And done! Now the dataset is ready, and the __getitem__ method can be called while iterating
+    """
     def __init__(self, split_sample_level, tag_combos, is_eval):
         super(PatchDataset, self).__init__()
         self.patch_level_order = ['sub', 'head', 'gaze', 'app']
-        self.split_sample_level = split_sample_level
+        self.split_sample_level = split_sample_level # always = 'head'
         self.is_eval = is_eval  # If evaluation, sampling is deterministic
         self.patches = MultiDict(self.patch_level_order) # {tags:{sub, head, app, gaze}} --> Info needed to load
         self.sub_unique_tags = {}  # sub --> Dict of tag --> set(unique tag values)
@@ -35,61 +40,101 @@ class PatchDataset(Dataset):
         self.patches[tags] = access_info
 
     def finalize_patches(self):
-        # In PreprocessedDataset.finalize_patches:
-        self.sample_key_list = list(self.patches.keys(stop_level=self.split_sample_level))
+        """Called in PreprocessedDataset.__init__()
+
+        This code builds a nested dictionary (self.sub_unique_tags) that tracks all unique values for each tag (head, gaze, app) per subject (sub). It essentially answers:
+        "For participant X, what cameras, timestamps, and eye patches are available?"
+        
+        self.sub_unique_tags will be:
+        ```
+        {
+            'participant_01': {  # Subject ID
+                'sub': {'participant_01'},  # Redundant but consistent
+                'head': {'basler', 'webcam_l'},  # Available cameras
+                'gaze': {0, 1, 2},            # Available timestamps
+                'app': {'left', 'right'}       # Available eye patches
+            },
+            'participant_02': {
+                ...
+            }
+        }
+        ```
+
+        """
+        # Called in PreprocessedDataset.finalize_patches:
+        self.sample_key_list = list(self.patches.keys(stop_level=self.split_sample_level)) # keys order: sub, head, gaze, app. this only lists the sub
         if not self.sample_key_list:
             raise ValueError("No samples found after filtering!")
 
         # Add to sub unique tags
-        for sub, sub_dict in self.patches.items():
+        for sub, sub_dict in self.patches.items(): # Ex. sub = {'participant': 'train01', 'stimulus_name': 'step007_image_MIT-i2277207572', 'stimulus_number': 0}
             cur_sub_unique_tags = {}
             cur_sub_unique_tags['sub'] = set([sub,])
-            for keys in sub_dict.keys():
-                for tag, tag_value in keys.items():
+            for keys in sub_dict.keys(): # Ex. sub_dict = {'app': 'left', 'gaze': 0, 'head': 'basler'}
+                for tag, tag_value in keys.items(): # tag is head, app, gaze
                     if tag not in cur_sub_unique_tags:
                         cur_sub_unique_tags[tag] = set()
-                    cur_sub_unique_tags[tag].add(tag_value)
+                    cur_sub_unique_tags[tag].add(tag_value) # Ex. tag = head, tag_value = basler
             self.sub_unique_tags[sub] = cur_sub_unique_tags
 
         # Pre-determine random values when in evaluation
         if self.is_eval:
             self.eval_sample_anchors = []
             self.eval_tag_perm_to_values = []
-            for sample_key in self.sample_key_list:
+            for sample_key in self.sample_key_list: # for every ex. {'participant': 'train01', 'stimulus_name': 'step007_image_MIT-i2277207572', 'stimulus_number': 0}
                 sample = self.patches[sample_key]
                 if isinstance(sample, MultiDict):
-                    anchor = random.choice(list(sample.keys()))
+                    anchor = random.choice(list(sample.keys())) # choose a random anchor
                 else:
                     anchor = {}
                 self.eval_sample_anchors.append(anchor)
-                self.eval_tag_perm_to_values.append(self.anchor_get_tag_values(sample_key, anchor))
+                self.eval_tag_perm_to_values.append(self.anchor_get_tag_values(sample_key, anchor)) # find the most valid permutation (for basis loss?)
 
 
     def set_tag_combos(self, tag_combos):
         for tag_combo in tag_combos:
             tag_combo['sub'] = 0
-        self.tag_combos = tag_combos
+        self.tag_combos = tag_combos # [{sub, head, app, gaze}, ...] 8 elements
+        
         self.tags = {}
         for combo_i, tag_combo in enumerate(self.tag_combos):
             for tag_name, tag_value in tag_combo.items():
-                if tag_name not in self.tags:
-                    self.tags[tag_name] = np.empty((len(self.tag_combos),), dtype=np.int)
+                if tag_name not in self.tags: # tag_name is sub, head, app, gaze
+                    self.tags[tag_name] = np.empty((len(self.tag_combos),), dtype=np.int) # at the end, it'll be {sub: [8], head: [8], ...}
                 self.tags[tag_name][combo_i] = tag_value
+        # self.tag represent {sub: [0, ..., 0], head: [0, 1, 0, 1, ..., 1], app: [0, 0, 1, 1, ..., 1], gaze: [0, 0, 0, 0, ..., 1]}
+        # It is basically all possible combinations of {head, app, gaze} (sub is all 0)
+        # It is literally self.tag_combos, but in np.array format
         self.tags = container_to_tensors(self.tags)
+
         self.unique_tag_perms = {}
         for tag_combo in self.tag_combos:
             for tag, tag_perm in tag_combo.items():
-                if tag not in self.unique_tag_perms:
+                if tag not in self.unique_tag_perms: # tag is sub, head, app, gaze
                     self.unique_tag_perms[tag] = set()
                 self.unique_tag_perms[tag].add(tag_perm)
+        # self.unique_tag_perms is just like self.tag_combos
+        # It is literally self.tag_combos, but in set format, thus "unique"
+        # given {0, 1} for all tag in tag_combos, self.unique_tag_perms will be {sub: {0}, head: {0, 1}, app: {0, 1}, gaze: {0, 1}}
 
     def __len__(self):
         return len(self.sample_key_list)
 
     def load_patch(self, access_info, sample_tags):
+        """This method is never called. The overridden one in PreprocessedDataset is used instead."""
         raise NotImplementedError()
 
     def anchor_get_tag_values(self, sample_key, anchor, attempts=100):
+        """
+        For a given sample_key, find the other permutation that has the most valid combinations
+        
+        Let's say sample_key is `{sub: 'participant_01', head: 'webcam_l', app: 'left', gaze: 0}`
+        
+        An example of the other permutation is `{sub: 'participant_01', head: 'basler', app: 'right', gaze: 1}`
+        And this permutation has the most valid combination (2 * 2 * 2 = 8)
+        
+        This function will return `{sub: 'participant_01', head: 'basler', app: 'right', gaze: 1}`
+        """
         tag_perm_to_value = {}
         sub = sample_key['sub']
         tags = sample_key
@@ -153,6 +198,19 @@ class PatchDataset(Dataset):
         return frame
 
     def __getitem__(self, idx):
+        """Return format:
+        ```
+        {
+            'frames':      (V, 3, H, W),  # V images (e.g., 8)
+            'gaze_dirs':   (V, 3),        # Gaze vectors per view
+            'head_dirs':   (V, 3),        # Head poses per view
+            'valids':      (V,),          # 1 if view exists, else 0
+            'eye_sides':   (V,),          # True for right eye, False for left
+            ...                           # (other metadata)
+        }
+        ```
+        V is the number of permutations (2 for pairwise loss, 8 for basis loss)
+        """
         # Get the list of all patches in the sample
         sample_key = self.sample_key_list[idx]
         sample = self.patches[sample_key]
@@ -181,10 +239,10 @@ class PatchDataset(Dataset):
         data['eye_sides'] = np.empty((V,), dtype=np.bool)
         data['glasses_ons'] = np.empty((V,), dtype=np.bool)
         for combo_i, tag_combo in enumerate(self.tag_combos):
-            combo_tags = {}
+            combo_tags = {} # it will be ex. {sub: {subject: "participant1", stimulus: "wikipedia", stimulus_number: 0}, head: "basler", app: "right", gaze: 1}
             combo_tags['sub'] = sample_key['sub']
             for tag, tag_perm in tag_combo.items():
-                tag_value = tag_perm_to_value[tag][tag_perm]
+                tag_value = tag_perm_to_value[tag][tag_perm] # tag_value ex. 'left', 'right', 'basler', 'center'
                 combo_tags[tag] = tag_value
             if combo_tags in self.patches:
                 patch, patch_path = self.load_patch(self.patches[combo_tags], combo_tags)
@@ -198,7 +256,7 @@ class PatchDataset(Dataset):
                     data['glasses_ons'][combo_i] = combo_tags['sub']['participant'] in eve_has_glasses
                 else:
                     data['glasses_ons'][combo_i] = 0
-            else:
+            else: # if the {sub, head, app, gaze} combination doesn't exist, fill with random noise
                 random_noise = np.random.randn(3, config.raw_input_size, config.raw_input_size)
                 random_min = np.min(random_noise)
                 random_max = np.max(random_noise)

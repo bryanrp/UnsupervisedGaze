@@ -53,12 +53,12 @@ def inspect_pbz2(file_path):
         print(f"ERROR inspecting {file_path}: {str(e)}")
 
 # Example usage
-sample_path = "../all-preprocessed/rgb-24/test/test01/step008_image_MIT-i2263021117/webcam_c/0/face/"
+sample_path = r"C:\Users\victus\Documents\git-project\capstone\UnsupervisedGaze\all-preprocessed\default\test\test01\step008_image_MIT-i2263021117\webcam_c\0\left"
 
 for i in range(0, 5):
     if os.path.exists(sample_path):
         print("✅ Path is valid!")
-        inspect_pbz2(f"{sample_path}{i}.pbz2")
+        inspect_pbz2(f"{sample_path}\\{i}.pbz2")
     else:
         print("❌ Path does not exist!")
         print(f"Current working directory: {os.getcwd()}")

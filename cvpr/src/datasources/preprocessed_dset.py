@@ -18,6 +18,12 @@ from datasources.patch_dset import PatchDataset
 
 
 class PreprocessedDataset(PatchDataset):
+    """This is used hand in hand with PatchDataset.
+    The steps are:
+    1. Set the tag combos, including tags tensor and unique_tags_perm
+    2. Finalize the patches, which builds self.sub_unique_tags. This is called by PreprocessedDataset.__init__
+    3. And done! Now the dataset is ready, and the __getitem__ method can be called while iterating
+    """
     def __init__(self, dataset_path, fold_name, patches_used, split_sample_level, tag_combos, is_eval):
         super(PreprocessedDataset, self).__init__(split_sample_level, tag_combos, is_eval)
         actually_use_fold = 'val' if fold_name == 'test' else 'train'

@@ -25,6 +25,18 @@ class Generator(nn.Module):
 
 
 class BaselineEncoder(Encoder):
+    """
+    ```
+    self.cnn_layers = ResNet(blocks=[2,2,2,2])  # Modified ResNet18
+    self.fc_features = {
+        'head':   Linear(152→12),
+        'gaze':   Linear(152→12),
+        'app':    Linear(152→64),
+        'common': Linear(152→64)
+    }
+    ```
+    Output: Feature vectors + confidence scores per feature type.
+    """
     def __init__(self):
         super(BaselineEncoder, self).__init__()
 
@@ -59,6 +71,20 @@ class BaselineEncoder(Encoder):
 
 
 class BaselineGenerator(Generator):
+    """
+    ```
+    nn.Sequential(
+        ConvTranspose2d(152, 512, 4),  # 4x4
+        ConvTranspose2d(512, 256, 4),  # 8x8
+        ConvTranspose2d(256, 128, 4),  # 16x16
+        ConvTranspose2d(128, 64, 4),   # 32x32
+        ConvTranspose2d(64, 32, 4),    # 64x64
+        ConvTranspose2d(32, 1, 4),     # 128x128
+        Sigmoid()
+    )
+    ```
+    Input: Concatenated features (152 = 12+12+64+64).
+    """
     def __init__(self, input_num_feature, generator_num_feature=64):
         super(BaselineGenerator, self).__init__()
 

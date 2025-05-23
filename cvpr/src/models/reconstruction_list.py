@@ -13,13 +13,24 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class ReconstructionList():
+    """
+    Purpose: Manages feature combinations for losses.
+
+    Key Methods:
+    - add_diff_pair(): Creates pairs for feature-swapping loss.
+    - add_reference_features(): Aggregates features across views. (basis loss?)
+
+    Output: Tensors ready for generator input:
+    - recon_features: (N, 152, 1, 1)  # Mixed features
+    - recon_gt:       (N, 1, H, W)    # Ground truth images
+    """
     def __init__(self, all_features, all_gt_frames, all_input_frames, all_valids, all_tags, unique_tags):
-        self.all_features = OrderedDict(all_features)
-        self.all_gt_frames = all_gt_frames
-        self.all_input_frames = all_input_frames
-        self.all_valids = all_valids
-        self.all_tags = all_tags
-        self.unique_tags = unique_tags
+        self.all_features = OrderedDict(all_features) # encoder outputs
+        self.all_gt_frames = all_gt_frames # augmented frames
+        self.all_input_frames = all_input_frames # augmented + noised frames
+        self.all_valids = all_valids # data['valids'][combo_i] = combo_tags['app'] != 'face' or not self.is_eval
+        self.all_tags = all_tags # input_data['tags'] = train_data['dataset'].original_full_dataset.tags
+        self.unique_tags = unique_tags # OrderedDict([('head', [0, 1]), ('gaze', [0, 1]), ('app', [0, 1]), ('sub', [0])])
 
         self.concat_features = []
         self.gt_frames = []
@@ -38,11 +49,11 @@ class ReconstructionList():
         self.loss_types.extend([loss_type,] * new_features.shape[0])
 
     def add_diff_pair(self, name):
-        if name not in self.unique_tags:
+        if name not in self.unique_tags: # name could be 'head', 'gaze', 'app'
             return
         num_diffs = len(self.unique_tags[name])
         if num_diffs <= 1:
-            # loss requires at least 2 different types of tags
+            # Pairwise loss requires at least 2 different types of tags
             return
         V = self.all_gt_frames.shape[1]
         C = 1
@@ -50,18 +61,26 @@ class ReconstructionList():
         W = self.all_gt_frames.shape[-1]
 
         # Loop through all tag comparisons
-        for i, tag_i in enumerate(self.unique_tags[name]):
+        for i, tag_i in enumerate(self.unique_tags[name]): # name = 'head', 'gaze', 'app';
             for tag_o in self.unique_tags[name][i+1:]:
                 # Determine indices to compare
                 idx_i = tag_i==self.all_tags[name]
                 idx_o = tag_o==self.all_tags[name]
+                # print(idx_i, idx_o, tag_i, tag_o, self.all_tags[name])
+                # tensor([ True,  True, False, False,  True,  True, False, False], device='cuda:0')
+                # tensor([False, False,  True,  True, False, False,  True,  True], device='cuda:0')
+                # 0 1
+                # tensor([0, 0, 1, 1, 0, 0, 1, 1], device='cuda:0', dtype=torch.int32)
                 
                 # Determine if valid pair - if not, revert to reconstruction loss
-                recon_valid = torch.logical_and(self.all_valids[:,idx_i], self.all_valids[:,idx_o])             
+                recon_valid = torch.logical_and(self.all_valids[:,idx_i], self.all_valids[:,idx_o])
+                # recon_valid.shape = torch.Size([96, 4])
 
                 # Gather the features needed for the reconstruction loss
                 recon_features = []
                 for feat_name, features in self.all_features.items():
+                    # feat_name = 'head', 'gaze', 'app'; features = (B,V,feat_size) = (96, 8, .)
+                    # feat_size are 64, 12, 64. Total features = 140
                     recon_features.append(features[:,idx_i])
                     if feat_name != name:
                         # Swap constant features, unless invalid
@@ -75,6 +94,9 @@ class ReconstructionList():
                 recon_gt = self.all_gt_frames[:,idx_i].reshape(-1,C,H,W)
                 recon_ref = self.all_input_frames[:,idx_o].reshape(-1,C,H,W)
                 
+                # print(recon_features.shape, recon_gt.shape, recon_ref.shape, recon_valid.shape)
+                # torch.Size([384, 140, 1, 1]) torch.Size([384, 1, 128, 128]) torch.Size([384, 1, 128, 128]) torch.Size([384])
+                # 384 = B * V / 2 = 96 * 8 / 2
                 self.append(recon_features, recon_gt, recon_ref, recon_valid, name)
 
     def add_reference_features(self, reference_features):

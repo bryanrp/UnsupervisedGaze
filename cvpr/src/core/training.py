@@ -115,6 +115,16 @@ def script_init_common():
 
 
 def setup_common(model, optimizers):
+    """Initializes training environment.
+    - Creates output directories.
+    - Sets up Tensorboard/W&B logging.
+    - Loads pretrained weights if resume_from is specified.
+    - Configures checkpoint manager.
+    
+    Critical outputs:
+    - Saving/loading model
+    - Tensorboard visualization
+    """
     identifier = ""
     if config.group_name != "":
         identifier += config.group_name + "/"
@@ -129,7 +139,7 @@ def setup_common(model, optimizers):
             shutil.rmtree(output_dir)
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
-    tensorboard = Tensorboard(output_dir)
+    tensorboard = Tensorboard(output_dir) # For visualization
 
     # Write source code to output dir
     # NOTE: do not over-write if resuming from an output directory
@@ -159,7 +169,7 @@ def setup_common(model, optimizers):
     # Sneak in some extra information into the model class instance
     model.identifier = identifier
     model.output_dir = output_dir
-    model.checkpoint_manager = CheckpointManager(model, optimizers)
+    model.checkpoint_manager = CheckpointManager(model, optimizers) # Handles model saving/loading
     model.last_epoch = 0.0
     model.last_step = 0
 
@@ -196,6 +206,14 @@ def get_training_batches(train_data_dicts):
 
 
 def learning_rate_schedule(optimizer, epoch_len, tensorboard_log_func, step):
+    """Dynamically adjusts LR during training.
+    
+    Warmup: Linear increase from base_lr to target_lr.
+    
+    Decay:
+    - exponential: Step-wise decay.
+    - cyclic: Oscillates between peaks and valleys.
+    """
     num_warmup_steps = int(epoch_len * config.num_warmup_epochs)
     selected_lr = None
     if step < num_warmup_steps:
@@ -241,7 +259,10 @@ def step_modulo(current, interval_size):
 
 
 def test_model_on_all(model, test_data_dicts, current_step, tensorboard=None):
-    """Get training batches of data from all training data sources."""
+    """Evaluates model on validation/test sets.
+
+    Get training batches of data from all training data sources.
+    """
     model.eval()
     salvage_memory()
     metrics = OrderedDict()
@@ -293,6 +314,9 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
     if config.skip_training:
         return
 
+    # Sets up learning rate schedulers (lr_schedulers).
+    # Calculates steps per epoch and total training steps.
+    # Enters the training loop for num_training_steps.
     assert tensorboard is not None  # We assume this exists in LR schedule logging
     initial_step = model.last_step  # Allow resuming
     train_data = train_val_data['train']
@@ -314,6 +338,14 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
     for current_step in range(initial_step, num_training_steps):
         current_epoch = (current_step * config.batch_size) / max_dataset_len  # fractional value
         tensorboard.update_current_step(current_step + 1)
+
+        # 1. Fetch batch. Structure:
+        # input_data = {
+        #     'frames': (B, V, C, H, W),  # Batch of V views
+        #     'gaze_dirs': (B, V, 3),      # Gaze vectors
+        #     'valids': (B, V)             # Mask for active views
+        #     ...
+        # }
         input_data = get_training_batches(train_data)
         input_data['tags'] = train_data['dataset'].original_full_dataset.tags
 
@@ -326,6 +358,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
         print(device)
         input_data = container_send_to_device(input_data, device)
 
+        # 2. Forward pass + loss calculation
         # Get model outputs
         outputs = model.train_batch(input_data, temperature=config.train_final_temperature*((current_step+1)/num_training_steps))
 
@@ -345,6 +378,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
                 valid_loss_terms.append(loss_term)
                 valid_optimizers.append(optimizer)
 
+        # 3. Backward pass
         # Perform gradient calculations for each loss term
         for i, (loss, optimizer) in enumerate(zip(valid_loss_terms, valid_optimizers)):
             not_last = i < (len(optimizers) - 1)
@@ -352,7 +386,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
                 continue
             loss.backward(retain_graph=not_last)
 
-        # Maybe clip gradients
+        # 4. Gradient clipping (optional)
         if config.do_gradient_clipping:
             if config.gradient_clip_by == 'norm':
                 clip_func = nn.utils.clip_grad_norm_
@@ -361,6 +395,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
             clip_amount = config.gradient_clip_amount
             clip_func(model.parameters(), clip_amount)
 
+        # 5. Optimizer step
         # Apply gradients
         for optimizer in valid_optimizers:
             optimizer.step()
@@ -415,7 +450,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
         if step_modulo(current_step, config.checkpoints_save_every_n_steps):
             model.checkpoint_manager.save_at_step(current_step + 1)
 
-        # test over subset of evaluation datasets
+        # Runs validation over subset of evaluation datasets
         if 'val' in train_val_data and step_modulo(current_step, config.test_every_n_steps):
 
             # Do test on subset of validation datasets

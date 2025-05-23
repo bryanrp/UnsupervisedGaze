@@ -21,6 +21,8 @@ predefined_eve_splits = {
 }
 
 def stimulus_type_from_folder_name(folder_name):
+    """Parses folder names to determine stimulus type (image/video/wikipedia/eye tracking points).
+    """
     parts = folder_name.split('_')
     if parts[1] in ('image', 'video', 'wikipedia'):
         return parts[1]
@@ -29,6 +31,42 @@ def stimulus_type_from_folder_name(folder_name):
     raise ValueError('Given folder name unexpected: %s' % folder_name)
 
 class VideoReader(object):
+    """Main class for reading video frames with associated timestamps.
+
+    __init__():
+        Derives timestamps file path from video path (handles different video naming conventions)
+        Verifies both video and timestamps files exist
+        - video_path: Path to video file
+        - frame_indices: Specific frames to read (None for all)
+        - is_async: Whether to use async reading
+        - output_size: Optional resize dimensions
+        - video_decoder_codec: Decoder to use
+
+    get_frames()
+        - Synchronously reads all requested frames
+        - Uses ffmpeg to decode video into raw frames
+        - Returns timestamps and frames as numpy arrays
+
+    preparations()
+        - Uses ffmpeg to probe video metadata (width, height)
+        - Loads timestamps from text file into numpy array
+        - Sets output dimensions if specified
+    
+    get_params()
+        - Configures ffmpeg input/output parameters:
+            - Input: Decoder selection (CPU/GPU)
+            - Output: Frame selection and resizing filters
+        - Builds complex filter commands for frame selection
+    
+    __enter__, __exit__
+        - Context manager support for async operation
+        - Ensures proper cleanup of ffmpeg process
+
+    __iter__, __next__
+        - Iterator protocol for async frame-by-frame reading
+        - Yields (timestamp, frame) tuples
+        - Uses ffmpeg's async API to stream frames
+    """
     def __init__(self, video_path, frame_indices=None, is_async=True, output_size=None, video_decoder_codec='libx264'):
         self.video_decoder_codec = video_decoder_codec
         self.is_async = is_async

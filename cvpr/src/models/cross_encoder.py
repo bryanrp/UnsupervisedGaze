@@ -100,7 +100,6 @@ class CrossEncoder(nn.Module):
         # Return center pixels
         return all_frames[...,tar_H_offset:tar_H_offset+config.final_input_size,tar_W_offset:tar_W_offset+config.final_input_size].detach()
 
-
     def add_random_noise(self, all_frames, temperature=0.):
         # Only add noise if temperature high enough
         if config.train_denoise_images and temperature > 0.01:
@@ -140,11 +139,18 @@ class CrossEncoder(nn.Module):
         H = input_frames.shape[3]
         W = input_frames.shape[4]
 
-        # Flatten the frames and add color dimentions
+        # Flatten the frames and add color dimensions
         flat_input_frames = input_frames.view(-1,C,H,W).repeat(1,3,1,1)
 
         # Encode the frames
         flat_features, flat_confs = self.encoder(flat_input_frames)
+        # Output structure (roughly):
+        # features = {
+        #     'head':   (B,V,12),  # B=batch, V=views
+        #     'gaze':   (B,V,12),
+        #     'app':    (B,V,64),
+        #     'common': (B,V,64)
+        # }
 
         # Unflatten outputs
         dict_features = OrderedDict()
@@ -188,31 +194,40 @@ class CrossEncoder(nn.Module):
 
 
     def train_batch(self, input_data, temperature=0.):
+        # 1: Input Preparation
         # Duplicate inputs when requested
         input_data = self.duplicate_inputs(input_data)
+        # print("TEST", input_data['tags'])
+        # {'head': tensor([0, 0, 0, 0, 1, 1, 1, 1], device='cuda:0', dtype=torch.int32),
+        # 'gaze': tensor([0, 0, 1, 1, 0, 0, 1, 1], device='cuda:0', dtype=torch.int32),
+        # 'app': tensor([0, 1, 0, 1, 0, 1, 0, 1], device='cuda:0', dtype=torch.int32),
+        # 'sub': tensor([0, 0, 0, 0, 0, 0, 0, 0], device='cuda:0', dtype=torch.int32)}
 
-        # Encode inputs
+        # 2: Encode inputs
         # Frame data will be in format: N x V x C x H x W
-        model_outputs = self.get_features(input_data, temperature)
+        model_outputs = self.get_features(input_data, temperature) # self.encoder called inside
         dict_features = model_outputs['features']
         dict_conf = model_outputs['confidences']
-        gt_frames = model_outputs['gt_frames']
-        input_frames = model_outputs['input_frames']
+        gt_frames = model_outputs['gt_frames'] # augmented frames
+        input_frames = model_outputs['input_frames'] # augmented + noised frames
 
         # Determine unique tags
         unique_tags = OrderedDict()
-        for feature_name in input_data['tags'].keys():
+        for feature_name in input_data['tags'].keys(): # dict_keys(['head', 'gaze', 'app', 'sub'])
             unique_tags[feature_name] = list(torch.unique(input_data['tags'][feature_name], sorted=True).detach().cpu().numpy())
+        # print("TEST2", unique_tags) # OrderedDict([('head', [0, 1]), ('gaze', [0, 1]), ('app', [0, 1]), ('sub', [0])])
 
+        # 3: Feature Mixing & Reconstruction
         # Mix up features for certain reconstruction losses
         recon_list = ReconstructionList(dict_features, gt_frames, input_frames, input_data['valids'], input_data['tags'], unique_tags)
 
-        # Only changing one feature - paired losses
+        # Pairwise loss - Only changing one feature
         # WARNING: Using this loss requires correctly ordered tag permutations (e.g. 0-0, 0-1, 1-0, 1-1)
         for feature_name in config.feature_sizes.keys():
             if 'recon_' + feature_name in list(config.loss_weights.keys()):
                 recon_list.add_diff_pair(feature_name)
 
+        # Basis loss - Mixing all features
         # Calculate reconstruction loss versus reference features
         if 'recon_ref' in config.loss_weights:
             # Calculate reference features
@@ -231,6 +246,7 @@ class CrossEncoder(nn.Module):
         # Get final features and ground truth for generator from the ReconstructionList
         recon_features, recon_gt, recon_ref, recon_valids, recon_types = recon_list.join()
 
+        # 4: Image Reconstruction
         # Pass through generator
         recon_estimates = self.generator(recon_features) * recon_valids.view(-1,1,1,1)
 

@@ -26,6 +26,7 @@ from utils.angles import pitch_yaw_to_vector
 logger = logging.getLogger(__name__)
 config, device = training.script_init_common()
 
+# Defines frame rates for different video sources (e.g., basler camera at 60fps, others at 30fps)
 source_to_fps = {
     'screen': 30,
     'basler': 60,
@@ -41,7 +42,8 @@ source_to_interval_ms = dict([
 sequence_segmentations = None
 cache_pkl_path = './src/segmentation_cache/10Hz_seqlen30.pkl'
 
-
+# Central configuration class controlling processing parameters
+# Key aspect: Downsampling from source FPS (30/60) to 10Hz processing rate
 class EveConfig():
     video_decoder_codec = 'libx264'  # libx264 | nvdec
     assumed_frame_rate = 10  # We will skip frames from source videos accordingly
@@ -56,6 +58,11 @@ class EveConfig():
 eve_config = EveConfig()
 
 class EveDataset():
+    """
+    __init__():
+        - Manages dataset paths and processing parameters
+        - Validates that source FPS is divisible by target FPS for clean downsampling
+    """
     def __init__(self, dataset_path: str,
                  participants_to_use: List[str] = None,
                  cameras_to_use: List[str] = None,
@@ -98,7 +105,11 @@ class EveDataset():
         logger.info('Initialized dataset class for: %s' % self.path)
 
     def build_segmentation_cache(self):
-        """Create support data structure for knowing how to segment (cut up) time sequences."""
+        """Create support data structure for knowing how to segment (cut up) time sequences.
+            - Precomputes how to split continuous video into fixed-length sequences
+            - Handles frame selection for downsampling (e.g., every 3rd frame for 30→10Hz)
+            - Caches results to avoid recomputation
+        """
         all_folders = sorted([
             d for d in os.listdir(self.path) if os.path.isdir(self.path + '/' + d)
         ])
@@ -189,6 +200,12 @@ class EveDataset():
     screen_frames_cache = {}
 
     def load_all_from_source(self, path, source, selected_indices, frame_type='eyes'):
+        """
+            - Loads HDF5 metadata (gaze vectors, head positions)
+            - Reads video frames using the VideoReader class
+            - Splits eye frames into left/right patches
+            - Converts between coordinate systems
+        """
         import numpy as np
         import h5py
         # assert that source is valid
@@ -338,6 +355,11 @@ class EveDataset():
         return "Processed {:s}, Camera {:s}".format(full_path, camera)
 
     def preprocess(self, output_dir):
+        """
+            - Processes different camera sources in parallel
+            - Maintains directory structure for processed outputs
+            - Uses compressed pickle (.pbz2) for storage efficiency
+        """
         patches = MultiDict(['sub', 'head', 'gaze', 'app'])
         # Remove multiprocessing by setting num_processes to 0
         num_processes = 32

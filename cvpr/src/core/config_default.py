@@ -26,9 +26,9 @@ class DefaultConfig(object):
     # TODO ADJUST THESE LINES
     # eve_raw_path = '/home/ubuntu/data/eve_dataset/'
     # eve_preprocessed_path = '/home/ubuntu/data/eve_preprocessed/'
-    eve_raw_path = r'C:\Users\victus\Documents\git-project\capstone\dataset-sample\eve-small'
+    eve_raw_path = r'C:\Users\victus\Downloads\eve_dataset\eve_dataset'
     # eve_preprocessed_path = 'C:/Users/victus/Documents/git-project/capstone/UnsupervisedGaze/all-preprocessed/default'
-    eve_preprocessed_path = r'C:\Users\victus\Documents\git-project\capstone\UnsupervisedGaze\all-preprocessed\try-13-3'
+    eve_preprocessed_path = r'C:\Users\victus\Documents\git-project\capstone\UnsupervisedGaze\all-preprocessed\eve-2'
 
     # Data loading
     @property
@@ -46,11 +46,11 @@ class DefaultConfig(object):
         return False
     train_denoise_images = True
 
-    batch_size = 64 #12*4
+    batch_size = 8 #12*4
     num_epochs = 10.
     num_epochs_gaze_estimation = 2000
 
-    train_data_workers = 1
+    train_data_workers = 0
 
     log_every_n_steps = 1  # NOTE: Every other interval has to be a multiple of this!!!
     tensorboard_scalars_every_n_steps = 1
@@ -142,7 +142,7 @@ class DefaultConfig(object):
     subsample_fold = TypedOrderedDict(str, int)
     @property
     def gaze_estimation_batch_size(self):
-        max_batch = 2000
+        max_batch = 64
         if 'train' in self.subsample_fold and self.subsample_fold['train'] > 0 and self.subsample_fold['train'] < max_batch:
             return self.subsample_fold['train']
         else:

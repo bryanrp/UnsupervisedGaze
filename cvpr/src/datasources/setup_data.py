@@ -66,7 +66,7 @@ def setup_data(mode):
                                 shuffle=not is_eval,
                                 drop_last=not is_eval,
                                 num_workers=config.train_data_workers,
-                                pin_memory=True,
+                                pin_memory=False,
                                 )
         
         # Log dataset
@@ -107,7 +107,7 @@ def init_datasets_gaze_estimation(dataset_path):
                                 shuffle=fold_name=='train',
                                 drop_last=False,
                                 num_workers=config.train_data_workers,
-                                pin_memory=True,
+                                pin_memory=False,
                                 )
 
         # Log dataset

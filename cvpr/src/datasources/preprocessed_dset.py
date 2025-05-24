@@ -26,9 +26,11 @@ class PreprocessedDataset(PatchDataset):
     """
     def __init__(self, dataset_path, fold_name, patches_used, split_sample_level, tag_combos, is_eval):
         super(PreprocessedDataset, self).__init__(split_sample_level, tag_combos, is_eval)
-        actually_use_fold = 'val' if fold_name == 'test' else 'train'
+        # Why?? Idk why??
+        # actually_use_fold = 'val' if fold_name == 'test' else 'train'
+        actually_use_fold = fold_name
         self.dataset_path = os.path.join(dataset_path, actually_use_fold)
-        print(self.dataset_path)
+        print("dataset_path:", self.dataset_path)
         data = bz2.BZ2File(os.path.join(self.dataset_path, 'index.pbz2'), 'rb')
         self.patches = cPickle.load(data)
 
@@ -41,11 +43,15 @@ class PreprocessedDataset(PatchDataset):
 
         participant_list = [x['sub']['participant'] for x in self.sample_key_list]
         unique_participants = np.sort(np.unique(participant_list))
-        nTrain = 1
-        if fold_name == 'train':
-            unique_participants = set(unique_participants[:nTrain])
-        else:
-            unique_participants = set(unique_participants[nTrain:])
+        print(f"unique_participants: {len(unique_participants)}")
+        # This is too?? Why??
+        # nTrain = 1
+        # print(f"nTrain: {nTrain}")
+        # if fold_name == 'train':
+        #     unique_participants = set(unique_participants[:nTrain])
+        # else:
+        #     unique_participants = set(unique_participants[nTrain:])
+        unique_participants = set(unique_participants)
         self.sample_key_list = [x for x in self.sample_key_list if x['sub']['participant'] in unique_participants]
 
     def load_patch(self, access_info, sample_tags):

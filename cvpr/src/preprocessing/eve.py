@@ -2,6 +2,8 @@
 
 import logging
 import os
+# For preprocessing. Force on-demand (lazy) mapping of CUDA/CuDNN DLLs.
+os.environ["CUDA_MODULE_LOADING"] = "LAZY"
 from typing import List
 import random
 import sys
@@ -17,14 +19,12 @@ import h5py
 import numpy as np
 
 from common import stimulus_type_from_folder_name, VideoReader, predefined_eve_splits
-file_dir_path = pathlib.Path(__file__).parent.resolve()
+file_dir_path = pathlib.Path(__file__).parent
 sys.path.append(os.path.join(file_dir_path, ".."))
-import core.training as training
 from utils.data_types import MultiDict
 from utils.angles import pitch_yaw_to_vector
 
 logger = logging.getLogger(__name__)
-config, device = training.script_init_common()
 
 # Defines frame rates for different video sources (e.g., basler camera at 60fps, others at 30fps)
 source_to_fps = {
@@ -40,14 +40,14 @@ source_to_interval_ms = dict([
 ])
 
 sequence_segmentations = None
-cache_pkl_path = './src/segmentation_cache/10Hz_seqlen30.pkl'
+cache_pkl_path = './src/segmentation_cache/1Hz_seqlen3.pkl'
 
 # Central configuration class controlling processing parameters
 # Key aspect: Downsampling from source FPS (30/60) to 10Hz processing rate
 class EveConfig():
     video_decoder_codec = 'libx264'  # libx264 | nvdec
-    assumed_frame_rate = 10  # We will skip frames from source videos accordingly
-    max_sequence_len = 5  # In frames assuming 10Hz
+    assumed_frame_rate = 1  # We will skip frames from source videos accordingly
+    max_sequence_len = 3  # In frames assuming 1Hz
     face_size = [256, 256]  # width, height
     eyes_size = [128, 128]  # width, height
     screen_size = [128, 72]  # width, height
@@ -116,6 +116,7 @@ class EveDataset():
         print(all_folders)
         output_to_cache = {}
         for folder_name in all_folders:
+            print(folder_name)
             participant_path = '%s/%s' % (self.path, folder_name)
             assert(os.path.isdir(participant_path))
             output_to_cache[folder_name] = {}
@@ -362,7 +363,7 @@ class EveDataset():
         """
         patches = MultiDict(['sub', 'head', 'gaze', 'app'])
         # Remove multiprocessing by setting num_processes to 0
-        num_processes = 32
+        num_processes = 0
 
         if num_processes > 0:
             pool = Pool(processes=num_processes)
@@ -430,6 +431,14 @@ class EveDataset():
 
 
 if __name__ == '__main__':
+    # (1) lazy-load CUDA/CuDNN (already set at top)
+    # (2) disable cuDNN as a fallback
+    import torch
+    torch.backends.cudnn.enabled = False
+
+    import core.training as training
+    config, device = training.script_init_common()
+
     eve_input_path = '/home/ubuntu/data/eve_dataset/'
     eve_output_path = '/home/ubuntu/data/eve_preprocessed/'
     eve_cameras = ['basler', 'webcam_l', 'webcam_c', 'webcam_r']

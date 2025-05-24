@@ -14,10 +14,10 @@ predefined_eve_splits = {
     # 'val': ['val%02d' % i for i in range(1, 6)],
     # 'test': ['test%02d' % i for i in range(1, 11)],
     # 'etc': ['etc%02d' % i for i in range(1, 3)],
-    'train': ['train%02d' % i for i in range(1, 3)],
-    'val': ['val%02d' % i for i in range(1, 2)],
-    'test': ['test%02d' % i for i in range(1, 2)],
-    'etc': ['etc%02d' % i for i in range(1, 3)],
+    'train': ['train02', 'train05', 'train39', 'train27', 'train09', 'val02'],
+    'val': ['train01', 'train19'],
+    'test': ['train04', 'train03'],
+    'etc': [],
 }
 
 def stimulus_type_from_folder_name(folder_name):

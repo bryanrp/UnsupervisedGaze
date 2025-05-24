@@ -116,7 +116,7 @@ def main_loop(model, optimizers, data, tensorboard=None):
     assert tensorboard is not None  # We assume this exists in LR schedule logging
     initial_step = model.last_step  # Allow resuming
     max_dataset_len = len(data['train']['dataset'])
-    num_steps_per_epoch = int(max_dataset_len / config.gaze_estimation_batch_size)
+    num_steps_per_epoch = int(np.ceil(max_dataset_len / config.gaze_estimation_batch_size)) # ceiling
     if num_steps_per_epoch  == 0:
         num_steps_per_epoch = 1
     num_training_steps = int(config.num_epochs_gaze_estimation * num_steps_per_epoch)

@@ -55,7 +55,9 @@ class PreprocessedDataset(PatchDataset):
         self.sample_key_list = [x for x in self.sample_key_list if x['sub']['participant'] in unique_participants]
 
     def load_patch(self, access_info, sample_tags):
-        entry = bz2.BZ2File(os.path.join(self.dataset_path, access_info), 'rb')
+        path = os.path.join(self.dataset_path, access_info)
+        path = path.replace('\\', '/')
+        entry = bz2.BZ2File(path, 'rb')
         entry = cPickle.load(entry)
         entry['frame'] = np.transpose(entry['frame'], [1, 2, 0]) 
         return entry, os.path.join(self.dataset_path, access_info)

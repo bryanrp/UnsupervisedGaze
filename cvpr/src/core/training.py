@@ -321,7 +321,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
     initial_step = model.last_step  # Allow resuming
     train_data = train_val_data['train']
     max_dataset_len = len(train_data['dataset'])
-    num_steps_per_epoch = int(max_dataset_len / config.batch_size)
+    num_steps_per_epoch = int(np.ceil(max_dataset_len / config.batch_size)) # ceiling
     num_training_steps = int(config.num_epochs * num_steps_per_epoch)
     lr_schedulers = [
         torch.optim.lr_scheduler.LambdaLR(

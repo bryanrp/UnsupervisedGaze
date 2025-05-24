@@ -52,7 +52,7 @@ class DefaultConfig(object):
 
     train_data_workers = 0
 
-    log_every_n_steps = 1  # NOTE: Every other interval has to be a multiple of this!!!
+    log_every_n_steps = 20  # NOTE: Every other interval has to be a multiple of this!!!
     tensorboard_scalars_every_n_steps = 1
     tensorboard_images_every_n_steps = 100
     tensorboard_learning_rate_every_n_steps = 100

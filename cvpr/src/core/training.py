@@ -355,7 +355,7 @@ def main_loop(model, optimizers, train_val_data, tensorboard=None):
             optimizer.zero_grad()
 
         # Move tensors to GPU
-        print(device)
+        # print(device)
         input_data = container_send_to_device(input_data, device)
 
         # 2. Forward pass + loss calculation

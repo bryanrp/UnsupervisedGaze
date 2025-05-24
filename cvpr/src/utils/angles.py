@@ -3,6 +3,7 @@
 import numpy as np 
 
 def angular_loss(pred, gt):
+    import torch
     import torch.nn.functional as F
     sim = F.cosine_similarity(pred, gt, dim=-1, eps=1e-8)
     sim = F.hardtanh_(sim, min_val=-1+1e-8, max_val=1-1e-8)

@@ -100,7 +100,7 @@ class PatchDataset(Dataset):
         for combo_i, tag_combo in enumerate(self.tag_combos):
             for tag_name, tag_value in tag_combo.items():
                 if tag_name not in self.tags: # tag_name is sub, head, app, gaze
-                    self.tags[tag_name] = np.empty((len(self.tag_combos),), dtype=np.int) # at the end, it'll be {sub: [8], head: [8], ...}
+                    self.tags[tag_name] = np.empty((len(self.tag_combos),), dtype=int) # at the end, it'll be {sub: [8], head: [8], ...}
                 self.tags[tag_name][combo_i] = tag_value
         # self.tag represent {sub: [0, ..., 0], head: [0, 1, 0, 1, ..., 1], app: [0, 0, 1, 1, ..., 1], gaze: [0, 0, 0, 0, ..., 1]}
         # It is basically all possible combinations of {head, app, gaze} (sub is all 0)

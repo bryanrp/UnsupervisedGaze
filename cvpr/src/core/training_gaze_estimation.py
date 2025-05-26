@@ -180,37 +180,37 @@ def main_loop(model, optimizers, data, tensorboard=None):
             optimizer.step()
 
         # Print outputs
-        outputs = container_detach(outputs)
-        outputs = container_to_numpy(outputs)
-        metrics = {}
-        metrics['loss'] = outputs['loss']
+        # outputs = container_detach(outputs)
+        # outputs = container_to_numpy(outputs)
+        # metrics = {}
+        # metrics['loss'] = outputs['loss']
 
-        log = ('Step %d, Epoch %.2f> ' % (current_step, current_epoch)
-                + ', '.join(['%s: %.4g' % (k, metrics[k]) for k in sorted(metrics.keys())]))
-        logger.info(log)
+        # log = ('Step %d, Epoch %.2f> ' % (current_step, current_epoch)
+        #         + ', '.join(['%s: %.4g' % (k, metrics[k]) for k in sorted(metrics.keys())]))
+        # logger.info(log)
 
         # Log to Tensorboard
-        for key, metric in metrics.items():
-            if key.startswith('loss_'):
-                key = key[len('loss_'):]
-                tensorboard.add_scalar('train_losses/%s' % key, metric)
-            elif key.startswith('metric_'):
-                key = key[len('metric_'):]
-                tensorboard.add_scalar('train_metrics/%s' % key, metric)
-            else:
-                tensorboard.add_scalar('train/%s' % key, metric)
+        # for key, metric in metrics.items():
+        #     if key.startswith('loss_'):
+        #         key = key[len('loss_'):]
+        #         tensorboard.add_scalar('train_losses/%s' % key, metric)
+        #     elif key.startswith('metric_'):
+        #         key = key[len('metric_'):]
+        #         tensorboard.add_scalar('train_metrics/%s' % key, metric)
+        #     else:
+        #         tensorboard.add_scalar('train/%s' % key, metric)
 
-        tensorboard.add_scalar('lr/epoch', current_epoch)
-        tensorboard.add_scalar('lr/lr', optimizers[0].param_groups[0]['lr'])
+        # tensorboard.add_scalar('lr/epoch', current_epoch)
+        # tensorboard.add_scalar('lr/lr', optimizers[0].param_groups[0]['lr'])
 
         # Quit if NaNs
-        there_are_NaNs = False
-        for k, v in metrics.items():
-            if np.any(np.isnan(v)):
-                logger.error('NaN encountered during training at value: %s' % k)
-                there_are_NaNs = True
-        if there_are_NaNs:
-            exit(1)
+        # there_are_NaNs = False
+        # for k, v in metrics.items():
+        #     if np.any(np.isnan(v)):
+        #         logger.error('NaN encountered during training at value: %s' % k)
+        #         there_are_NaNs = True
+        # if there_are_NaNs:
+        #     exit(1)
 
         # We're done with the previous outputs
         del input_data, outputs, loss_terms

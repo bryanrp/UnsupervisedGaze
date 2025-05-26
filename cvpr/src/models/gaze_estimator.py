@@ -83,7 +83,7 @@ class GazeEstimation(nn.Module):
             return input_data['features']['mean']
 
         # Calculate reconstruction loss versus reference features
-        if config.gaze_estimation_use_reference_features and self.training:
+        if config.gaze_estimation_use_reference_features and self.training: # use basis features for training
             # Determine unique tags
             unique_tags = OrderedDict()
             for feature_name in config.eval_features:
@@ -103,7 +103,7 @@ class GazeEstimation(nn.Module):
 
             # Construct input features
             feats = form_features_from_references(reference_features, input_data['tags'], unique_tags)
-        else:
+        else: # just train the features directly
             feats = [input_data['features'][feat_name] for feat_name in config.eval_features]
             feats = torch.cat(feats, dim=-1)
 

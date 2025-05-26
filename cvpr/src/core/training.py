@@ -274,7 +274,7 @@ def test_model_on_all(model, test_data_dicts, current_step, tensorboard=None):
             input_data['tags'] = test_data_dicts['dataset'].original_full_dataset.tags
 
             # Move tensors to GPU
-            print(device)
+            # print(device)
             input_data = container_send_to_device(input_data, device)
 
             # Get model outputs

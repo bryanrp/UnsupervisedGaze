@@ -104,9 +104,9 @@ class DefaultConfig(object):
     feature_sizes['gaze'] = 12
     feature_sizes['head'] = 12
     loss_weights = TypedOrderedDict(str, float)
-    loss_weights['recon_gaze'] = 1.0
-    loss_weights['recon_app'] = 1.0
-    loss_weights['recon_head'] = 1.0
+    # loss_weights['recon_gaze'] = 1.0
+    # loss_weights['recon_app'] = 1.0
+    # loss_weights['recon_head'] = 1.0
     loss_weights['recon_ref'] = 1.0
     cross_encoder_load_pretrained = False
     cross_encoder_checkpoint_folder = ""
@@ -114,9 +114,9 @@ class DefaultConfig(object):
     # Reference feature parameters
     reference_dropout = False
     reference_comb_func = 'mean'  # first / mean / max / median / vec_median
-    reference_confidence = False
+    reference_confidence = True
     reference_confidence_softmax_beta = 1000.
-    gaze_estimation_use_reference_features = False
+    gaze_estimation_use_reference_features = True
     @property
     def gaze_estimation_pred_mean(self):
         return False

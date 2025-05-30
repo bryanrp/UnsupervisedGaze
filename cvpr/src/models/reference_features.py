@@ -94,8 +94,8 @@ def form_features_from_references(reference_features, all_tags, unique_tags):
     all_tags = {'head': [cam1, cam2,...], ...}  # Original view tags
     ```
     """
-    print("TEST1", {k: v.shape for (k, v) in reference_features.items()}, all_tags, unique_tags)
-    print("TEST2", reference_features, all_tags, unique_tags)
+    # print("TEST1", {k: v.shape for (k, v) in reference_features.items()}, all_tags, unique_tags)
+    # print("TEST2", reference_features, all_tags, unique_tags)
     batch_size = next(iter(reference_features.values()))[0].shape[0]
     num_views = next(iter(all_tags.values())).shape[0]
     feature_sizes = {k: v[0].shape[-1] for (k, v) in reference_features.items()}

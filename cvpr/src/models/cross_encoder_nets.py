@@ -6,6 +6,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 from torchvision.models.resnet import BasicBlock, ResNet
+import torchvision.models as models
 
 from core.config_default import DefaultConfig
 
@@ -40,9 +41,21 @@ class BaselineEncoder(Encoder):
     def __init__(self):
         super(BaselineEncoder, self).__init__()
 
-        self.cnn_layers = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
-                                 num_classes=self.total_features,
-                                 norm_layer=nn.InstanceNorm2d)
+        # self.cnn_layers = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
+        #                          num_classes=self.total_features,
+        #                          norm_layer=nn.InstanceNorm2d)
+        
+        # 1. Load pre-trained ResNet-18
+        self.cnn_layers = models.resnet18(pretrained=True)
+
+        # 2. Determine the number of input features to the original fc layer of ResNet-18
+        # For ResNet-18, this is 512.
+        num_ftrs_resnet_fc = self.cnn_layers.fc.in_features
+
+        # 3. Replace the final fully connected layer (self.cnn_layers.fc)
+        # The original code's ResNet was set up to output self.total_features directly.
+        # We replicate this behavior by changing the fc layer of the pre-trained ResNet.
+        self.cnn_layers.fc = nn.Linear(num_ftrs_resnet_fc, self.total_features)
         
         self.fc_features = nn.ModuleDict()
         for feature_name, num_feature in config.feature_sizes.items():
